@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeOps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<script>
+  (function () {
+    var saved = localStorage.getItem('lifeops-theme') || 'system';
+    document.documentElement.dataset.theme = saved;
+  })();
+</script>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="logo">LifeOps</div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="theme-toggle-btn" title="Cycle theme"></button>
+      <button id="focus-mode-btn" title="Focus mode (f)" style="font-size:11px;">Focus</button>
+      <button class="primary" id="quick-add-btn">+ Quick Add <span class="muted" style="font-weight:400;">(n)</span></button>
+    </div>
+  </div>
+  <div class="body-grid">
+    <nav class="sidebar">
+      <div class="nav-group-label">Navigate</div>
+      <a class="nav-link" data-route="/home"       href="#/home"><span class="nav-icon">⌂</span><span class="label">Home</span></a>
+      <a class="nav-link" data-route="/insights"   href="#/insights"><span class="nav-icon">#</span><span class="label">Dashboard</span></a>
+      <a class="nav-link" data-route="/areas"      href="#/areas"><span class="nav-icon">A</span><span class="label">Areas</span></a>
+      <a class="nav-link" data-route="/dreams"     href="#/dreams"><span class="nav-icon">*</span><span class="label">Dreams</span></a>
+      <a class="nav-link" data-route="/projects"   href="#/projects"><span class="nav-icon">P</span><span class="label">Projects</span></a>
+      <a class="nav-link" data-route="/tasks"      href="#/tasks"><span class="nav-icon">T</span><span class="label">Tasks</span></a>
+      <a class="nav-link" data-route="/habits"     href="#/habits"><span class="nav-icon">H</span><span class="label">Habits</span></a>
+      <a class="nav-link" data-route="/calendar"   href="#/calendar"><span class="nav-icon">C</span><span class="label">Calendar</span></a>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-divider"></div>
+      <a class="nav-link" data-route="/settings"   href="#/settings"><span class="nav-icon">S</span><span class="label">Settings</span></a>
+    </nav>
+    <main class="main-panel" id="main-panel">
+      <div class="empty-state">Loading...</div>
+    </main>
+  </div>
+</div>
+
+<div class="detail-overlay" id="detail-overlay"></div>
+<div class="detail-panel" id="detail-panel"></div>
+
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal"></div>
+</div>
+
+<script src="/js/theme.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/router.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/charts/charts.js"></script>
+<script src="/js/views/home.js"></script>
+<script src="/js/views/dashboard.js"></script>
+<script src="/js/views/areas.js"></script>
+<script src="/js/views/dreams.js"></script>
+<script src="/js/views/projects.js"></script>
+<script src="/js/views/tasks.js"></script>
+<script src="/js/views/habits.js"></script>
+<script src="/js/views/calendar.js"></script>
+<script src="/js/views/insights.js"></script>
+<script src="/js/views/settings.js"></script>
+<script src="/js/focus.js"></script>
+<script src="/js/review.js"></script>
+<script src="/js/quickadd.js"></script>
+<script>
+  // Feature 5: Markdown renderer (sanitized)
+  function renderMd(text) {
+    if (!text || typeof marked === 'undefined') return escapeHtml(text || '');
+    const raw = marked.parse(text, { breaks: true, gfm: true });
+    return raw.replace(/<script[\s\S]*?<\/script>/gi, '');
+  }
+
+  Theme.initToggleButton(document.getElementById('theme-toggle-btn'));
+  document.getElementById('quick-add-btn').addEventListener('click', openQuickAdd);
+  document.getElementById('modal-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-overlay') closeModal();
+  });
+  document.getElementById('focus-mode-btn').addEventListener('click', () => FocusMode.toggle());
+
+  Router.start();
+  FocusMode.init();
+</script>
+</body>
+</html>
