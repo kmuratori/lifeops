@@ -44,7 +44,6 @@ def compute_streaks(habit: m.Habit, logs_by_date: dict) -> tuple[int, int]:
     target = habit.frequency_count or 1
 
     if freq == "x_per_week":
-        # Streak = consecutive weeks where done >= target
         def week_done(week_mon: date) -> bool:
             count = sum(
                 1 for i in range(7)
@@ -76,9 +75,7 @@ def compute_streaks(habit: m.Habit, logs_by_date: dict) -> tuple[int, int]:
         return current, best
 
     if freq == "x_per_month":
-        # Streak = consecutive months where done >= target
         def month_done(first: date) -> bool:
-            # Count done in the month
             count = sum(
                 1 for dt, done in logs_by_date.items()
                 if done and dt.year == first.year and dt.month == first.month
@@ -92,7 +89,6 @@ def compute_streaks(habit: m.Habit, logs_by_date: dict) -> tuple[int, int]:
                 current += 1
             else:
                 break
-            # Move to previous month
             if m_start.month == 1:
                 m_start = m_start.replace(year=m_start.year - 1, month=12)
             else:
@@ -154,7 +150,6 @@ def compute_completion_rate(habit: m.Habit, logs_by_date: dict) -> float:
     target = habit.frequency_count or 1
 
     if freq == "x_per_week":
-        # Last 4 weeks: how many had >= target completions
         weeks_met = 0
         total_weeks = 4
         for i in range(total_weeks):
@@ -168,7 +163,6 @@ def compute_completion_rate(habit: m.Habit, logs_by_date: dict) -> float:
         return round(weeks_met / total_weeks, 3)
 
     if freq == "x_per_month":
-        # Last 3 months
         months_met = 0
         total_months = 3
         ms = _month_start(today)
@@ -289,7 +283,6 @@ def log_habit(habit_id: str, payload: HabitLogIn, db: Session = Depends(get_db))
     is_measurable = (habit.habit_type or "yes_no") == "measurable"
     if is_measurable and payload.value is not None:
         logged_value = payload.value
-        # Mark done if value meets the target (or any positive value when no target set)
         done = 1 if (habit.target_value is None or logged_value >= habit.target_value) else 0
     else:
         logged_value = None
@@ -333,4 +326,12 @@ def get_habit_logs(
     if to_date:
         q = q.filter(m.HabitLog.date <= date.fromisoformat(to_date))
     logs = q.order_by(m.HabitLog.date).all()
-    return [{"date": log.date.isoformat(), "done": bool(log.done), "note": log.note} for log in logs]
+    return [
+        {
+            "date": log.date.isoformat(),
+            "done": bool(log.done),
+            "note": log.note,
+            "value": log.value,
+        }
+        for log in logs
+    ]

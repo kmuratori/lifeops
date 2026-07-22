@@ -218,22 +218,423 @@ mark {
 .danger-btn:hover { background: rgba(224,92,92,0.08); }
 .num { text-align: right; }
 
-/* -----------------------------------------------------------------------
-   Feature 1: Habits -- cards, 7-day dots, heatmap
-   --------------------------------------------------------------------- */
-.habit-card { cursor: pointer; }
-.habit-card:hover { background: var(--surface-raised); }
 
-.habit-check-btn {
-  flex-shrink: 0;
-  transition: all 0.12s ease;
+/* ==========================================================================
+   Habits View — Fixed Layout
+   ========================================================================== */
+
+/* ---------- Container ---------- */
+.habit-list-header,
+.habit-row {
+  display: grid;
+  grid-template-columns: 1fr repeat(7, 36px) 44px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
 }
-.habit-done {
-  border-color: var(--success) !important;
-  color: var(--success) !important;
-  opacity: 0.8;
+
+.habit-list-header {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+/* ---------- Info column ---------- */
+.habit-row-info {
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.habit-row-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.habit-row-meta {
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+/* ---------- Week cells ---------- */
+.habit-week-header-cell,
+.habit-week-cell {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.habit-week-header-cell {
+  text-align: center;
+  color: var(--muted);
+}
+
+.habit-week-header-cell.is-today {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.habit-week-cell {
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.08s, border-color 0.08s;
+}
+
+.habit-week-cell:hover {
+  transform: scale(1.08);
+  border-color: var(--accent);
+  z-index: 1;
+}
+
+.habit-week-cell.not-scheduled {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--bg-base),
+    var(--bg-base) 3px,
+    var(--border) 3px,
+    var(--border) 4px
+  );
+  opacity: 0.4;
   cursor: default;
 }
+
+.habit-week-cell.not-scheduled:hover {
+  transform: none;
+  border-color: transparent;
+}
+
+.habit-week-cell.is-today {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- Toggle button (last column) ---------- */
+.habit-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.habit-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: scale(1.05);
+}
+
+.habit-toggle.done {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.habit-toggle.partial {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: #fff;
+}
+
+.habit-toggle:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ---------- Sparkline (inside info area now) ---------- */
+.habit-row-sparkline {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+/* ---------- Row hover ---------- */
+.habit-row {
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.habit-row:hover {
+  background: var(--bg-elevated);
+}
+
+.habit-row:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---------- Tooltip ---------- */
+#habit-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  opacity: 0;
+  transition: opacity 0.1s;
+  max-width: 220px;
+  line-height: 1.4;
+}
+
+/* ---------- Snackbar ---------- */
+#habit-snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+#habit-snackbar.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+#habit-snackbar button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+#habit-snackbar button:hover {
+  background: var(--accent-soft);
+}
+
+/* ---------- Modal log form ---------- */
+#habit-log-form input[type="number"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 14px;
+}
+
+#habit-log-form input[type="number"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---------- Detail panel heatmap ---------- */
+.heatmap-cell {
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.2);
+  z-index: 2;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 640px) {
+  .habit-list-header,
+  .habit-row {
+    grid-template-columns: 1fr repeat(7, 28px) 40px;
+    gap: 2px;
+    padding: 0 8px;
+  }
+
+  .habit-week-header-cell,
+  .habit-week-cell {
+    width: 28px;
+    height: 28px;
+  }
+
+  .habit-toggle {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .habit-row-title {
+    font-size: 12px;
+  }
+
+  .habit-row-meta {
+    font-size: 10px;
+  }
+}
+
+/* Title takes all remaining space */
+.habit-row-info { flex: 1 1 auto; min-width: 0; }
+.habit-row-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.habit-row-meta { font-size: 11px; margin-top: 2px; }
+
+/* Fixed 7-cell week strip -- never more, never scrolls */
+.habit-week {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.habit-week-cell {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.08s ease;
+}
+.habit-week-cell:hover { transform: scale(1.12); }
+.habit-week-cell.is-today { border-color: var(--accent); border-width: 1.5px; }
+.habit-week-cell.not-scheduled { cursor: default; opacity: 0.4; }
+
+.habit-row-right {
+  flex: 0 0 auto;
+  width: 64px;
+  display: flex;
+  justify-content: flex-end;
+}
+.habit-row-sparkline { opacity: 0.85; }
+.habit-sparkline { display: block; }
+
+/* Today action -- rightmost element in the row, icon-only (no "mark done" label) */
+.habit-toggle {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-data);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.habit-toggle:hover { border-color: var(--accent); }
+.habit-toggle.done {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--bg-base);
+}
+.habit-toggle.partial {
+  border-color: var(--success);
+  color: var(--success);
+  background: transparent;
+}
+
+/* Today action -- lives on the name side, replaces the old "mark done" button */
+.habit-toggle {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-data);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.habit-toggle:hover { border-color: var(--accent); }
+.habit-toggle.done {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--bg-base);
+}
+.habit-toggle.partial {
+  border-color: var(--success);
+  color: var(--success);
+  background: transparent;
+}
+
+.habit-row-info { flex: 0 0 180px; min-width: 0; }
+.habit-row-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.habit-row-meta { font-size: 11px; margin-top: 2px; }
+
+/* Fixed 7-cell week strip -- never more, never scrolls */
+.habit-week {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.habit-week-cell {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.08s ease;
+}
+.habit-week-cell:hover { transform: scale(1.12); }
+.habit-week-cell.is-today { border-color: var(--accent); border-width: 1.5px; }
+.habit-week-cell.not-scheduled { cursor: default; opacity: 0.4; }
+
+.habit-row-right {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+.habit-row-sparkline { opacity: 0.85; }
+.habit-sparkline { display: block; }
 
 /* -----------------------------------------------------------------------
    Feature 2: Calendar -- equal-width fixed-height cells, clipped content
