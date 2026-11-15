@@ -46,7 +46,7 @@ def get_calendar(month: str = Query(..., description="YYYY-MM"), db: Session = D
                 "title": t.title,
                 "status": t.status.value if hasattr(t.status, "value") else t.status,
                 "priority": t.priority.value if hasattr(t.priority, "value") else t.priority,
-                "project_title": t.project.title if t.project else None,
+                "project_title": t.project.title if t.project else "Standalone",
                 "area_color": area_color,
             })
 

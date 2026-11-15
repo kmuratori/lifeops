@@ -278,11 +278,24 @@ mark {
 .habit-week-header-cell {
   text-align: center;
   color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.1;
 }
 
 .habit-week-header-cell.is-today {
   color: var(--accent);
   font-weight: 700;
+}
+
+.habit-week-day-name {
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.habit-week-day-number {
+  font-size: 10px;
 }
 
 .habit-week-cell {
@@ -291,10 +304,26 @@ mark {
   transition: transform 0.08s, border-color 0.08s;
 }
 
+.habit-week-cell:focus-visible {
+  outline: 3px solid var(--text-primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px var(--accent);
+  z-index: 2;
+}
+
 .habit-week-cell:hover {
   transform: scale(1.08);
   border-color: var(--accent);
   z-index: 1;
+}
+
+.habit-week-cell.is-missed:not(.is-complete) {
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--surface));
+}
+
+.habit-week-cell.is-today:not(.is-complete):not(.not-scheduled) {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 }
 
 .habit-week-cell.not-scheduled {
@@ -842,3 +871,129 @@ mark {
    --------------------------------------------------------------------- */
 .health-dot { display: inline-block; flex-shrink: 0; border-radius: 50%; }
 .health-label { font-size: 11px; color: var(--text-muted); }
+
+/* Accessible interaction states and compact bulk-action surfaces */
+.view-actions { display: flex; align-items: center; gap: 8px; }
+.selection-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.selection-toolbar[hidden] { display: none; }
+.selection-toolbar label { display: inline-flex; align-items: center; gap: 7px; margin: 0; }
+.selection-toolbar input[type="checkbox"],
+.task-select-control input,
+.project-select-control input { width: auto; accent-color: var(--accent); }
+.project-select-control,
+.task-select-control {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 8px;
+  cursor: pointer;
+}
+.task-card.selection-mode { cursor: default; }
+.task-card:focus-within,
+.project-card:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.quickadd-suggestions {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% - 10px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 30px rgba(0,0,0,.4);
+}
+.quickadd-suggestions[hidden] { display: none; }
+.quickadd-suggestion {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 9px 11px;
+  text-align: left;
+  background: transparent;
+}
+.quickadd-suggestion:last-child { border-bottom: 0; }
+.quickadd-suggestion:hover,
+.quickadd-suggestion.is-active,
+.quickadd-suggestion[aria-selected="true"] { background: var(--surface); }
+.quickadd-suggestion-title { font-family: var(--font-data); font-size: 12px; }
+.quickadd-suggestion-status { font-size: 11px; margin-top: 5px; }
+#quickadd-form .field { position: relative; }
+
+.app-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(80vh, 680px);
+  padding: 0;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  box-shadow: 0 24px 70px rgba(0,0,0,.55);
+}
+.app-dialog::backdrop { background: rgba(0,0,0,.68); backdrop-filter: blur(2px); }
+.app-dialog-form { padding: 22px; }
+.app-dialog-form h2 { margin-bottom: 8px; color: var(--text-primary); }
+.app-dialog-message { color: var(--text-muted); line-height: 1.6; white-space: pre-wrap; }
+.dialog-field-label { display: block; margin: 12px 0 5px; color: var(--text-muted); font-size: 12px; }
+.dialog-input { width: 100%; }
+.app-dialog-error { min-height: 18px; margin-top: 6px; color: var(--danger); font-size: 12px; }
+.app-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.app-dialog button:focus-visible,
+.app-dialog input:focus-visible,
+.app-dialog select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.export-controls { border: 1px solid var(--border); padding: 12px; }
+.export-controls legend { padding: 0 5px; color: var(--text-muted); font-size: 12px; }
+.export-entity-options { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.export-entity-options label,
+.export-related-tasks { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.export-entity-options input,
+.export-related-tasks input { width: auto; accent-color: var(--accent); }
+#export-project-ids { min-height: 100px; margin-bottom: 10px; }
+.import-preview { margin-top: 12px; padding: 12px; border: 1px solid var(--border); background: var(--surface); }
+.import-preview h3 { margin-bottom: 8px; }
+.import-preview ul { margin: 6px 0 10px; padding-left: 20px; }
+.import-errors { color: var(--danger); }
+.import-errors ul { max-height: 180px; overflow: auto; }
+.import-valid { color: var(--success); }
+.import-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.import-actions label { margin: 0; }
+
+.habit-week-cell-button {
+  padding: 0;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 5px;
+}
+.habit-week-cell-button:focus-visible {
+  z-index: 2;
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent);
+}
+.habit-week-cell-button:disabled { cursor: default; }
+.habit-toggle { width: auto; min-width: 44px; padding: 0 5px; border-radius: 5px; font-size: 10px; }
+
+@media (max-width: 720px) {
+  .selection-toolbar { align-items: stretch; }
+  .selection-toolbar > * { max-width: 100%; }
+  .quickadd-suggestion { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .import-actions { align-items: stretch; flex-direction: column; }
+  .habit-list-header, .habit-row { grid-template-columns: minmax(120px, 1fr) repeat(7, minmax(28px, 32px)) 68px; gap: 2px; padding-left: 4px; padding-right: 4px; }
+  .habit-week-header-cell, .habit-week-cell { width: 100%; }
+}

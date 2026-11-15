@@ -84,7 +84,7 @@ function openDreamModal(dream, areas) {
   document.getElementById('cancel-modal').addEventListener('click', closeModal);
   if (isEdit) {
     document.getElementById('delete-dream').addEventListener('click', async () => {
-      if (confirm(`Delete "${dream.title}"?`)) {
+      if (await appConfirm(`Delete "${dream.title}"?`, { title: 'Delete dream', confirmText: 'Delete', danger: true })) {
         await API.deleteDream(dream.id);
         closeModal();
         Router.resolve();
@@ -93,19 +93,27 @@ function openDreamModal(dream, areas) {
   }
   document.getElementById('dream-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const fd       = new FormData(e.target);
-    const area_ids = areas.filter((a) => fd.get(`area_${a.id}`)).map((a) => a.id);
-    const payload  = {
-      title:       fd.get('title'),
-      description: fd.get('description') || null,
-      icon:        fd.get('icon') || null,
-      status:      fd.get('status'),
-      area_ids,
-    };
-    if (isEdit) await API.updateDream(dream.id, payload);
-    else        await API.createDream(payload);
-    closeModal();
-    Router.resolve();
+    const finish = beginFormSubmission(e.currentTarget);
+    if (!finish) return;
+    try {
+      const fd = new FormData(e.currentTarget);
+      const area_ids = areas.filter((a) => fd.get(`area_${a.id}`)).map((a) => a.id);
+      const payload = {
+        title:       fd.get('title'),
+        description: fd.get('description') || null,
+        icon:        fd.get('icon') || null,
+        status:      fd.get('status'),
+        area_ids,
+      };
+      if (isEdit) await API.updateDream(dream.id, payload);
+      else        await API.createDream(payload);
+      closeModal();
+      Router.resolve();
+    } catch (error) {
+      appAlert(error.message, { title: 'Could not save dream' });
+    } finally {
+      finish();
+    }
   });
 }
 

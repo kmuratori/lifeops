@@ -9,8 +9,15 @@ const API = {
     }
     const res = await fetch(path, opts);
     if (!res.ok) {
-      const text = await res.text().catch(() => res.statusText);
-      throw new Error(`${method} ${path} failed: ${text}`);
+      const text = await res.text().catch(() => res.statusText || '');
+      let message = text || res.statusText || `HTTP ${res.status}`;
+      try {
+        const payload = JSON.parse(text);
+        const detail = payload.detail ?? payload.message;
+        if (typeof detail === 'string') message = detail;
+        else if (detail !== undefined) message = JSON.stringify(detail);
+      } catch {}
+      throw new Error(`${method} ${path} failed: ${message}`);
     }
     if (res.status === 204) return null;
     return res.json();
@@ -41,7 +48,13 @@ const API = {
   createTask: (t) => API._req('POST', '/api/tasks', t),
   updateTask: (id, t) => API._req('PUT', `/api/tasks/${id}`, t),
   deleteTask: (id) => API._req('DELETE', `/api/tasks/${id}`),
-  quickAdd: (text) => API._req('POST', '/api/tasks/quick-add', { text }),
+  quickAdd: (text, selection = null) => API._req('POST', '/api/tasks/quick-add', {
+    text,
+    ...(selection ? { selection_kind: selection.kind, selection_id: selection.id } : {}),
+  }),
+  taskSuggestions: (q) => API._req('GET', `/api/tasks/suggestions?q=${encodeURIComponent(q)}`),
+  bulkTasks: (payload) => API._req('POST', '/api/tasks/bulk', payload),
+  bulkProjects: (payload) => API._req('POST', '/api/projects/bulk', payload),
 
   // Insights
   dashboard: () => API._req('GET', '/api/insights/dashboard'),
@@ -101,5 +114,19 @@ const API = {
     const fd = new FormData();
     fd.append('file', file);
     return fetch('/api/settings/import', { method: 'POST', body: fd }).then(r => r.json());
+  },
+  previewImport: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch('/api/settings/import/preview', { method: 'POST', body: fd }).then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Could not validate this backup');
+      return data;
+    });
+  },
+  commitImport: (token, conflictPolicy) => API._req('POST', '/api/settings/import/commit', { token, conflict_policy: conflictPolicy }),
+  exportData: (options) => {
+    const params = new URLSearchParams(options);
+    window.location.assign(`/api/settings/export?${params.toString()}`);
   },
 };

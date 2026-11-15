@@ -55,7 +55,7 @@ def dashboard(db: Session = Depends(get_db)):
 
     def task_out(t):
         return {"id": t.id, "title": t.title,
-                "project_title": t.project.title if t.project else None,
+                "project_title": t.project.title if t.project else "Standalone",
                 "due_date": t.due_date.isoformat() if t.due_date else None,
                 "completed_at": t.completed_at.isoformat() if t.completed_at else None,
                 "priority": t.priority.value if hasattr(t.priority, "value") else t.priority}

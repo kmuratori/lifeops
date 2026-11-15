@@ -1,2 +1,8 @@
 __pycache__/
 venv/
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.db.pre-standalone-tasks.bak

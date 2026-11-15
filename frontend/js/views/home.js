@@ -8,7 +8,7 @@ async function renderHome(main) {
   ]);
 
   const today    = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const dayOfWeek = (today.getDay() + 6) % 7; // 0=Mon
 
   const hour = today.getHours();
@@ -96,7 +96,7 @@ async function renderHome(main) {
           <h2>Upcoming Deadlines</h2>
           ${d.upcoming_deadlines.length ? d.upcoming_deadlines.slice(0, 6).map((t) => `
             <div class="list-row">
-              <span style="font-size:13px;">${escapeHtml(t.title)}</span>
+              <span style="font-size:13px;">${escapeHtml(t.title)} <span class="muted" style="font-size:10px;">${escapeHtml(t.project_title || 'Standalone')}</span></span>
               <span class="muted mono" style="font-size:11px; white-space:nowrap;">${fmtDate(t.due_date)}</span>
             </div>
           `).join('') : `<div class="muted" style="font-size:12px;">Nothing due in the next 14 days.</div>`}
@@ -111,7 +111,7 @@ async function renderHome(main) {
         <h2>Recently Completed</h2>
         ${d.recent_completed.slice(0, 5).map((t) => `
           <div class="list-row">
-            <span style="font-size:13px;">${escapeHtml(t.title)}</span>
+            <span style="font-size:13px;">${escapeHtml(t.title)} <span class="muted" style="font-size:10px;">${escapeHtml(t.project_title || 'Standalone')}</span></span>
             <span class="muted mono" style="font-size:11px;">${fmtDate(t.completed_at)}</span>
           </div>
         `).join('')}
@@ -132,7 +132,7 @@ async function renderHome(main) {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.habitId;
       btn.disabled = true;
-      await API.logHabit(id, { done: true });
+      await logWithUndo(id, { done: true }, { done: false, value: null }, 'Habit updated', () => renderHome(main));
       renderHome(main);
     });
   });
@@ -163,7 +163,7 @@ function homeHabitRow(h) {
         style="padding:3px 10px; font-size:11px; flex-shrink:0;
                color:${h.done_today ? 'var(--success)' : 'var(--text-muted)'};
                border-color:${h.done_today ? 'rgba(78,202,139,0.4)' : 'var(--border)'};">
-        ${h.done_today ? '✓ done' : 'mark done'}
+        ${h.done_today ? 'Done' : 'Mark done'}
       </button>
     </div>
   `;

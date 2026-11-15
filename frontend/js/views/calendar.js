@@ -3,6 +3,10 @@
 let _calYear  = new Date().getFullYear();
 let _calMonth = new Date().getMonth(); // 0-indexed
 
+function calendarLocalDateIso(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 async function renderCalendar(main) {
   const today    = new Date();
   const monthStr = `${_calYear}-${String(_calMonth + 1).padStart(2, '0')}`;
@@ -50,7 +54,7 @@ async function renderCalendar(main) {
 }
 
 function renderGrid(container, calData, today) {
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = calendarLocalDateIso(today);
   const days     = Object.keys(calData).sort();
   if (!days.length) return;
 
@@ -186,7 +190,7 @@ function calPillFull(item, isPast) {
     title="Open ${item._type}">
     <span style="flex:1; font-size:12px;">${escapeHtml(item.title)}</span>
     ${typeTag}
-    <span class="muted" style="font-size:10px;">↗</span>
+    <span class="muted" style="font-size:10px;">Open</span>
   </div>`;
 }
 
@@ -198,7 +202,7 @@ function _navigateToItem(type, id) {
 }
 
 function renderAgenda(container, calData, today) {
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = calendarLocalDateIso(today);
   const days = Object.keys(calData).sort().filter((d) => {
     const items = calData[d];
     return items.tasks.length || items.projects.length || items.habits.length;

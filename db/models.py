@@ -112,7 +112,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=True)
     title = Column(String, nullable=False)
     status = Column(SAEnum(TaskStatus), default=TaskStatus.todo, nullable=False)
     priority = Column(SAEnum(TaskPriority), default=TaskPriority.medium, nullable=False)

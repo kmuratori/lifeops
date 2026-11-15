@@ -31,7 +31,8 @@ app.include_router(calendar.router)
 # hash-based client routing (#/dashboard etc.) always resolves to index.html
 app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
 app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
-app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+if (FRONTEND_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
 
 @app.get("/")
@@ -41,4 +42,7 @@ def index():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=7070, reload=True)
+    from scheduler import start_scheduler
+    start_scheduler()
+    import config
+    uvicorn.run("main:app", host=config.HOST, port=config.PORT)

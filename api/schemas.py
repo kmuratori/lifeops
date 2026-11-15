@@ -109,7 +109,7 @@ class ProjectOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 class TaskIn(BaseModel):
-    project_id: str
+    project_id: Optional[str] = None
     title: str
     status: str = "todo"
     priority: str = "medium"
@@ -131,7 +131,7 @@ class TaskUpdate(BaseModel):
 class TaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
-    project_id: str
+    project_id: Optional[str] = None
     title: str
     status: str
     priority: str
@@ -145,6 +145,19 @@ class TaskOut(BaseModel):
 
 class QuickAddIn(BaseModel):
     text: str
+    selection_kind: Optional[str] = None
+    selection_id: Optional[str] = None
+
+
+class TaskBulkIn(BaseModel):
+    ids: List[str]
+    action: str
+    project_id: Optional[str] = None
+
+
+class ProjectBulkIn(BaseModel):
+    ids: List[str]
+    action: str
 
 
 # ---------------------------------------------------------------------------

@@ -194,28 +194,43 @@ function openAreaModal(area, allAreas) {
 
   if (isEdit) {
     document.getElementById('delete-area').addEventListener('click', async () => {
-      if (confirm(`Delete "${area.title}"? This also deletes its projects and tasks.`)) {
+      const accepted = await appConfirm(
+        `Delete "${area.title}"? Areas with projects cannot be removed. Reassign those projects first; tasks and project progress will not be cascade-deleted.`,
+        { title: 'Delete area', confirmText: 'Delete', danger: true },
+      );
+      if (!accepted) return;
+      try {
         await API.deleteArea(area.id);
         closeModal();
         Router.resolve();
+      } catch (error) {
+        appAlert(error.message, { title: 'Area was not deleted' });
       }
     });
   }
 
   document.getElementById('area-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const fd = new FormData(e.target);
-    const payload = {
-      title:       fd.get('title'),
-      description: fd.get('description') || null,
-      icon:        fd.get('icon') || null,
-      color:       fd.get('color') || initialColor,
-      status:      fd.get('status'),
-    };
-    if (isEdit) await API.updateArea(area.id, payload);
-    else        await API.createArea(payload);
-    closeModal();
-    Router.resolve();
+    const finish = beginFormSubmission(e.currentTarget);
+    if (!finish) return;
+    try {
+      const fd = new FormData(e.currentTarget);
+      const payload = {
+        title:       fd.get('title'),
+        description: fd.get('description') || null,
+        icon:        fd.get('icon') || null,
+        color:       fd.get('color') || initialColor,
+        status:      fd.get('status'),
+      };
+      if (isEdit) await API.updateArea(area.id, payload);
+      else        await API.createArea(payload);
+      closeModal();
+      Router.resolve();
+    } catch (error) {
+      appAlert(error.message, { title: 'Could not save area' });
+    } finally {
+      finish();
+    }
   });
 }
 

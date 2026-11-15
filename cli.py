@@ -7,6 +7,8 @@ import typer
 from db.session import init_db, SessionLocal, DB_PATH
 from db import models as m, crud
 import config
+from api.settings import _dump_all
+from typing import Optional
 
 app = typer.Typer(help="LifeOps — a life command center for people who live in the terminal.")
 task_app = typer.Typer(help="Manage tasks")
@@ -48,21 +50,22 @@ def status():
 @task_app.command("add")
 def task_add(
     title: str = typer.Option(..., prompt=True),
-    project_id: str = typer.Option(..., prompt=True),
+    project_id: Optional[str] = typer.Option(None),
     priority: str = typer.Option("medium", prompt=True),
 ):
     """Interactive task creation."""
     init_db()
     db = SessionLocal()
     try:
-        project = db.query(m.Project).get(project_id)
-        if not project:
+        project_id = project_id or typer.prompt("Project id (leave blank for standalone)", default="")
+        project = db.query(m.Project).get(project_id) if project_id else None
+        if project_id and not project:
             typer.echo(f"No project with id {project_id}", err=True)
             raise typer.Exit(1)
-        task = m.Task(project_id=project_id, title=title, priority=priority)
+        task = m.Task(project_id=project.id if project else None, title=title, priority=priority)
         db.add(task)
         db.commit()
-        typer.echo(f"Added task '{title}' to {project.title}")
+        typer.echo(f"Added task '{title}'" + (f" to {project.title}" if project else " as standalone"))
     finally:
         db.close()
 
@@ -129,14 +132,7 @@ def backup():
                 out.append(d)
             return out
 
-        data = {
-            "areas": dump(db.query(m.Area).all()),
-            "dreams": dump(db.query(m.Dream).all()),
-            "dream_areas": dump(db.query(m.DreamArea).all()),
-            "projects": dump(db.query(m.Project).all()),
-            "tasks": dump(db.query(m.Task).all()),
-            "snapshots": dump(db.query(m.Snapshot).all()),
-        }
+        data = {"format": "lifeops", "schema_version": 1, **_dump_all(db)}
         path = f"{__import__('pathlib').Path.home()}/lifeops_backup_{date.today().isoformat()}.json"
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
@@ -171,8 +167,27 @@ def import_backup(path: str):
             for k in ("due_date", "completed_at"):
                 if row.get(k):
                     row[k] = date.fromisoformat(row[k])
-            row.pop("created_at", None)
+            if row.get("created_at"):
+                row["created_at"] = datetime.fromisoformat(row["created_at"])
             db.merge(m.Task(**row))
+        for row in data.get("habits", []):
+            if row.get("created_at"):
+                row["created_at"] = date.fromisoformat(row["created_at"])
+            db.merge(m.Habit(**row))
+        for row in data.get("habit_logs", []):
+            if row.get("date"):
+                row["date"] = date.fromisoformat(row["date"])
+            db.merge(m.HabitLog(**row))
+        for row in data.get("weekly_reviews", []):
+            if row.get("week_start"):
+                row["week_start"] = date.fromisoformat(row["week_start"])
+            if row.get("completed_at"):
+                row["completed_at"] = datetime.fromisoformat(row["completed_at"])
+            db.merge(m.WeeklyReview(**row))
+        for row in data.get("snapshots", []):
+            if row.get("date"):
+                row["date"] = date.fromisoformat(row["date"])
+            db.merge(m.Snapshot(**row))
         db.commit()
         typer.echo(f"Restored from {path}")
     finally:

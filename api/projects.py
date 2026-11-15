@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from db.session import get_db
 from db import models as m, crud
-from api.schemas import ProjectIn, ProjectOut
+from api.schemas import ProjectIn, ProjectOut, ProjectBulkIn
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -33,6 +33,36 @@ def _to_out(db: Session, p: m.Project) -> ProjectOut:
 @router.get("", response_model=list[ProjectOut])
 def list_projects(db: Session = Depends(get_db)):
     return [_to_out(db, p) for p in db.query(m.Project).all()]
+
+
+@router.post("/bulk")
+def bulk_projects(payload: ProjectBulkIn, db: Session = Depends(get_db)):
+    ids = list(dict.fromkeys(payload.ids))
+    if not ids:
+        raise HTTPException(422, "Select at least one project")
+    if len(ids) > 500:
+        raise HTTPException(422, "A single operation can include at most 500 projects")
+    projects = db.query(m.Project).filter(m.Project.id.in_(ids)).all()
+    if len(projects) != len(ids):
+        raise HTTPException(404, "One or more selected projects no longer exist")
+    if payload.action == "pause":
+        for project in projects:
+            project.status = m.ProjectStatus.paused
+    elif payload.action == "delete":
+        task_count = db.query(m.Task).filter(m.Task.project_id.in_(ids)).count()
+        snapshot_count = db.query(m.Snapshot).filter(m.Snapshot.project_id.in_(ids)).count()
+        if task_count or snapshot_count:
+            raise HTTPException(
+                409,
+                f"Selected projects contain {task_count} task(s) and {snapshot_count} snapshot(s). "
+                "Move or detach tasks and preserve/export snapshots before deleting projects.",
+            )
+        for project in projects:
+            db.delete(project)
+    else:
+        raise HTTPException(422, "Unsupported project action")
+    db.commit()
+    return {"ok": True, "affected": len(projects), "action": payload.action}
 
 
 @router.post("", response_model=ProjectOut)
@@ -73,6 +103,14 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
     project = db.query(m.Project).get(project_id)
     if not project:
         raise HTTPException(404, "Project not found")
+    task_count = db.query(m.Task).filter(m.Task.project_id == project_id).count()
+    snapshot_count = db.query(m.Snapshot).filter(m.Snapshot.project_id == project_id).count()
+    if task_count or snapshot_count:
+        raise HTTPException(
+            409,
+            f"Project has {task_count} associated task(s) and {snapshot_count} progress snapshot(s). "
+            "Move or detach tasks and preserve/export snapshots before deleting it.",
+        )
     db.delete(project)
     db.commit()
     return {"ok": True}

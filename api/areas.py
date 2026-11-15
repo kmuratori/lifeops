@@ -116,6 +116,9 @@ def delete_area(area_id: str, db: Session = Depends(get_db)):
     area = db.query(m.Area).get(area_id)
     if not area:
         raise HTTPException(404, "Area not found")
+    project_count = db.query(m.Project).filter(m.Project.area_id == area_id).count()
+    if project_count:
+        raise HTTPException(409, f"Area has {project_count} project(s). Reassign or remove them before deleting the area.")
     db.delete(area)
     db.commit()
     return {"ok": True}
