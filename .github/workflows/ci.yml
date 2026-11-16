@@ -1,0 +1,60 @@
+name: ci
+run-name: Running tests & Build docker image
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+
+jobs:
+  be-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Install requirements
+        run: .venv/bin/python -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -v
+
+  fe-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Run tests
+        run: TZ=UTC node --test tests/*.test.cjs
+
+  docker-build:
+    needs: [be-tests, fe-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build docker image
+        run: docker build -t lifeops:prod .
+
+      - name: Run scripts/smoke_test.sh
+        run: ./scripts/smoke_test.sh
+
+permissions:
+  contents: read
