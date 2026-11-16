@@ -79,8 +79,16 @@ const API = {
     return API._req('GET', `/api/habits/${id}/logs?${params}`);
   },
 
-  // Feature 2: Calendar
+  // Feature 2: Unified calendar and event management
   getCalendar: (month) => API._req('GET', `/api/calendar?month=${month}`),
+  getCalendarItems: (start, end, types = ['event', 'task', 'project']) => {
+    const params = new URLSearchParams({ start, end, types: types.join(',') });
+    return API._req('GET', `/api/calendar/items?${params.toString()}`);
+  },
+  listEvents: () => API._req('GET', '/api/events'),
+  createEvent: (event) => API._req('POST', '/api/events', event),
+  updateEvent: (id, event) => API._req('PUT', `/api/events/${encodeURIComponent(id)}`, event),
+  deleteEvent: (id) => API._req('DELETE', `/api/events/${encodeURIComponent(id)}`),
 
   // Feature 3: Weekly Reviews
   listReviews: () => API._req('GET', '/api/reviews'),

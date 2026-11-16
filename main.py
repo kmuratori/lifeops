@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from db.session import init_db
-from api import areas, dreams, projects, tasks, insights, habits, reviews, settings, calendar
+from api import areas, dreams, projects, tasks, insights, habits, reviews, settings, calendar, events
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -26,6 +26,7 @@ app.include_router(habits.router)
 app.include_router(reviews.router)
 app.include_router(settings.router)
 app.include_router(calendar.router)
+app.include_router(events.router)
 
 # static assets (css/js/fonts) — index.html served separately below so that
 # hash-based client routing (#/dashboard etc.) always resolves to index.html

@@ -6,7 +6,7 @@ Never default a nullable text field to "" — that masks real NULLs.
 from datetime import date, datetime
 from typing import Optional, List, Any, Dict
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +114,7 @@ class TaskIn(BaseModel):
     status: str = "todo"
     priority: str = "medium"
     due_date: Optional[date] = None
+    planning_date: Optional[date] = None
     effort: Optional[int] = None
     notes: Optional[str] = None
 
@@ -123,6 +124,7 @@ class TaskUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     due_date: Optional[date] = None
+    planning_date: Optional[date] = None
     effort: Optional[int] = None
     notes: Optional[str] = None
     project_id: Optional[str] = None
@@ -136,11 +138,121 @@ class TaskOut(BaseModel):
     status: str
     priority: str
     due_date: Optional[date] = None
+    planning_date: Optional[date] = None
     completed_at: Optional[date] = None
     effort: Optional[int] = None
     notes: Optional[str] = None
     project_title: Optional[str] = None
     area_color: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Events
+# ---------------------------------------------------------------------------
+
+def _validate_offset_datetime(value):
+    if value is None:
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("must be an ISO-8601 timestamp with an explicit UTC offset") from exc
+    elif isinstance(value, datetime):
+        parsed = value
+    else:
+        raise ValueError("must be an ISO-8601 timestamp with an explicit UTC offset")
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("must include an explicit UTC offset")
+    return parsed
+
+
+class EventIn(BaseModel):
+    title: str = Field(min_length=1)
+    description: Optional[str] = None
+    is_all_day: bool
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    location: Optional[str] = None
+    category: Optional[str] = None
+    color: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("title must not be blank")
+        return value
+
+    @field_validator("start_at", "end_at", mode="before")
+    @classmethod
+    def timed_values_need_explicit_offsets(cls, value):
+        return _validate_offset_datetime(value)
+
+    @model_validator(mode="after")
+    def validate_date_fields(self):
+        if self.is_all_day:
+            if self.start_date is None or self.end_date is None:
+                raise ValueError("all-day events require start_date and exclusive end_date")
+            if self.end_date <= self.start_date:
+                raise ValueError("end_date must be after start_date")
+            if self.start_at is not None or self.end_at is not None:
+                raise ValueError("all-day events must not include timed fields")
+        else:
+            if self.start_at is None or self.end_at is None:
+                raise ValueError("timed events require start_at and end_at")
+            if self.end_at <= self.start_at:
+                raise ValueError("end_at must be after start_at")
+            if self.start_date is not None or self.end_date is not None:
+                raise ValueError("timed events must not include all-day date fields")
+        return self
+
+
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    is_all_day: Optional[bool] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    location: Optional[str] = None
+    category: Optional[str] = None
+    color: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value):
+        if value is not None:
+            value = value.strip()
+            if not value:
+                raise ValueError("title must not be blank")
+        return value
+
+    @field_validator("start_at", "end_at", mode="before")
+    @classmethod
+    def timed_values_need_explicit_offsets(cls, value):
+        return _validate_offset_datetime(value)
+
+
+class EventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    title: str
+    description: Optional[str] = None
+    is_all_day: bool
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    location: Optional[str] = None
+    category: Optional[str] = None
+    color: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class QuickAddIn(BaseModel):

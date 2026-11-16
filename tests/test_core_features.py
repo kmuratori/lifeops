@@ -21,13 +21,16 @@ from api.habits import is_scheduled, compute_streaks
 from api.insights import dashboard as insights_dashboard
 from api.settings import (
     _IMPORT_PREVIEWS,
+    _dump_all,
     _import_conflict_state,
     _validate_import,
     commit_import,
+    download_backup,
     export_csv,
+    preview_import,
     selective_export,
 )
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 
 class CoreFeatureTests(unittest.TestCase):
@@ -196,6 +199,7 @@ class CoreFeatureTests(unittest.TestCase):
                 "priority": "medium", "due_date": None, "completed_at": None,
                 "effort": None, "notes": None, "created_at": datetime.now().isoformat(),
             }],
+            "events": [],
             "snapshots": [], "habits": [], "habit_logs": [], "weekly_reviews": [],
         }
         counts, conflicts = _import_conflict_state(incoming, self.db)
@@ -223,7 +227,7 @@ class CoreFeatureTests(unittest.TestCase):
         token = "partial-import-test"
         _IMPORT_PREVIEWS[token] = {
             "data": {key: [] for key in (
-                "areas", "dreams", "dream_areas", "projects", "tasks",
+                "areas", "dreams", "dream_areas", "projects", "tasks", "events",
                 "snapshots", "habits", "habit_logs", "weekly_reviews",
             )},
             "issues": [],
@@ -247,6 +251,15 @@ class CoreFeatureTests(unittest.TestCase):
                 "priority": "medium", "due_date": None, "completed_at": None,
                 "effort": None, "notes": None, "created_at": "2026-10-01T12:00:00",
             }],
+            "events": [{
+                "id": "e1", "title": "Workshop", "description": None, "is_all_day": False,
+                "start_at": "2026-10-03T10:00:00+02:00",
+                "end_at": "2026-10-03T11:00:00+02:00",
+                "start_date": None, "end_date": None, "location": "Room 4",
+                "category": "work", "color": "#123456",
+                "created_at": "2026-10-01T10:00:00+00:00",
+                "updated_at": "2026-10-01T10:00:00+00:00",
+            }],
             "snapshots": [],
             "habits": [{
                 "id": "h1", "title": "Walk", "area_id": "a1", "description": None,
@@ -267,6 +280,113 @@ class CoreFeatureTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertIsNone(self.db.get(m.Task, "t1").project_id)
         self.assertEqual(self.db.query(m.HabitLog).one().habit_id, "h1")
+        event = self.db.get(m.Event, "e1")
+        self.assertEqual(event.start_at, datetime(2026, 10, 3, 8, 0))
+        self.assertEqual(event.end_at, datetime(2026, 10, 3, 9, 0))
+
+    def test_full_backup_includes_events_and_event_restore_works(self):
+        event = m.Event(
+            id="backup-event",
+            title="All hands",
+            is_all_day=False,
+            start_at=datetime(2026, 11, 1, 9, 0),
+            end_at=datetime(2026, 11, 1, 10, 0),
+        )
+        self.db.add(event)
+        self.db.commit()
+
+        backup = json.loads(download_backup(self.db).body)
+        self.assertIn("events", backup)
+        saved = next(row for row in backup["events"] if row["id"] == "backup-event")
+        self.assertEqual(saved["start_at"], "2026-11-01T09:00:00+00:00")
+        self.assertTrue(_dump_all(self.db)["events"])
+
+        self.db.delete(event)
+        self.db.commit()
+        normalized, issues = _validate_import(backup, self.db, allow_database_relationships=False)
+        self.assertEqual(issues, [])
+        counts, conflicts = _import_conflict_state(normalized, self.db)
+        token = "full-event-backup-restore"
+        _IMPORT_PREVIEWS[token] = {
+            "data": normalized,
+            "issues": [],
+            "complete_backup": True,
+            "counts": counts,
+            "conflicts": conflicts,
+            "created": datetime.now().timestamp(),
+        }
+
+        result = commit_import({"token": token, "conflict_policy": "replace_all"}, self.db)
+        self.assertTrue(result["ok"])
+        restored = self.db.get(m.Event, "backup-event")
+        self.assertEqual(restored.start_at, datetime(2026, 11, 1, 9, 0))
+
+    def test_selective_event_export_and_import(self):
+        event = m.Event(
+            id="selective-event",
+            title="Conference day",
+            is_all_day=True,
+            start_date=date(2026, 11, 10),
+            end_date=date(2026, 11, 11),
+        )
+        self.db.add(event)
+        self.db.commit()
+
+        payload = json.loads(selective_export(entities="events", db=self.db).body)
+        self.assertEqual(payload["entities"], ["events"])
+        self.assertEqual([row["id"] for row in payload["events"]], ["selective-event"])
+        self.assertEqual(payload["tasks"], [])
+
+        normalized, issues = _validate_import(payload, self.db)
+        self.assertEqual(issues, [])
+        self.db.delete(event)
+        self.db.commit()
+        counts, conflicts = _import_conflict_state(normalized, self.db)
+        token = "selective-event-import"
+        _IMPORT_PREVIEWS[token] = {
+            "data": normalized,
+            "issues": [],
+            "complete_backup": False,
+            "counts": counts,
+            "conflicts": conflicts,
+            "created": datetime.now().timestamp(),
+        }
+
+        result = commit_import({"token": token, "conflict_policy": "replace"}, self.db)
+        self.assertTrue(result["ok"])
+        restored = self.db.get(m.Event, "selective-event")
+        self.assertEqual(restored.start_date, date(2026, 11, 10))
+        self.assertEqual(restored.end_date, date(2026, 11, 11))
+
+    def test_legacy_full_backup_without_events_remains_replace_all_importable(self):
+        self.db.add(m.Event(
+            id="remove-on-legacy-restore",
+            title="Not in old backup",
+            is_all_day=True,
+            start_date=date(2026, 11, 10),
+            end_date=date(2026, 11, 11),
+        ))
+        self.db.commit()
+        legacy_backup = {
+            "format": "lifeops",
+            "schema_version": 1,
+            "areas": [], "dreams": [], "dream_areas": [], "projects": [],
+            "tasks": [], "snapshots": [], "habits": [], "habit_logs": [],
+            "weekly_reviews": [],
+        }
+
+        upload = UploadFile(file=BytesIO(json.dumps(legacy_backup).encode()), filename="legacy.json")
+        preview = asyncio.run(preview_import(upload, self.db))
+        self.assertTrue(preview["valid"], preview["issues"])
+        self.assertTrue(preview["complete_backup"])
+        self.assertEqual(_IMPORT_PREVIEWS[preview["token"]]["data"]["events"], [])
+
+        result = commit_import(
+            {"token": preview["token"], "conflict_policy": "replace_all"},
+            self.db,
+        )
+        self.assertTrue(result["ok"])
+        self.assertIsNone(self.db.get(m.Event, "remove-on-legacy-restore"))
 
     def test_custom_habit_schedule_does_not_count_unscheduled_days(self):
         habit = m.Habit(title="Monday practice", frequency="custom", target_days="0")

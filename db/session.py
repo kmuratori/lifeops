@@ -5,7 +5,7 @@ import sqlite3
 import shutil
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from db.models import Base
@@ -20,6 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _migrate_task_planning_date()
     _migrate_standalone_tasks()
     # Schema migrations — each ALTER TABLE is wrapped so existing DBs are safe
     _migrations = [
@@ -36,6 +37,14 @@ def init_db():
                 conn.commit()
             except Exception:
                 pass  # Column already exists — safe to ignore
+
+
+def _migrate_task_planning_date():
+    """Add the nullable planning date without rebuilding or replacing tasks."""
+    with engine.begin() as conn:
+        columns = {column["name"] for column in inspect(conn).get_columns("tasks")}
+        if "planning_date" not in columns:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN planning_date DATE"))
 
 
 def _migrate_standalone_tasks():
@@ -64,6 +73,7 @@ def _migrate_standalone_tasks():
                 status VARCHAR NOT NULL,
                 priority VARCHAR NOT NULL,
                 due_date DATE,
+                planning_date DATE,
                 completed_at DATE,
                 effort INTEGER,
                 notes TEXT,
@@ -72,9 +82,9 @@ def _migrate_standalone_tasks():
         """)
         raw.execute("""
             INSERT INTO tasks_new
-                (id, project_id, title, status, priority, due_date, completed_at,
+                (id, project_id, title, status, priority, due_date, planning_date, completed_at,
                  effort, notes, created_at)
-            SELECT id, project_id, title, status, priority, due_date, completed_at,
+            SELECT id, project_id, title, status, priority, due_date, planning_date, completed_at,
                    effort, notes, created_at
             FROM tasks
         """)

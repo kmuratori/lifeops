@@ -2,9 +2,9 @@
 list that tags Areas, per-project Snapshots, Habits with logs, and WeeklyReviews."""
 import uuid
 import enum
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
-from sqlalchemy import Column, String, Float, Date, DateTime, ForeignKey, Text, Integer, Enum as SAEnum
+from sqlalchemy import Column, String, Float, Date, DateTime, ForeignKey, Text, Integer, Boolean, Enum as SAEnum
 from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
@@ -12,6 +12,11 @@ Base = declarative_base()
 
 def gen_uuid():
     return str(uuid.uuid4())
+
+
+def utc_now_naive():
+    """UTC timestamp for SQLite columns that are stored without timezone data."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AreaStatus(str, enum.Enum):
@@ -117,12 +122,32 @@ class Task(Base):
     status = Column(SAEnum(TaskStatus), default=TaskStatus.todo, nullable=False)
     priority = Column(SAEnum(TaskPriority), default=TaskPriority.medium, nullable=False)
     due_date = Column(Date, nullable=True)
+    planning_date = Column(Date, nullable=True)
     completed_at = Column(Date, nullable=True)
     effort = Column(Integer, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="tasks")
+
+
+class Event(Base):
+    """A scheduled calendar event; timed values are stored as naive UTC."""
+    __tablename__ = "events"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    is_all_day = Column(Boolean, nullable=False, default=False)
+    start_at = Column(DateTime, nullable=True)
+    end_at = Column(DateTime, nullable=True)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)  # exclusive for all-day events
+    location = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    color = Column(String, nullable=True)
+    created_at = Column(DateTime, default=utc_now_naive, nullable=False)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False)
 
 
 class Snapshot(Base):

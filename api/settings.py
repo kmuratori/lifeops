@@ -6,7 +6,7 @@ import os
 import time
 import zipfile
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -25,6 +25,14 @@ def _serialize(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
+def _utc_backup_datetime(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _dump_all(db: Session) -> dict:
     """Dump all tables as lists of dicts."""
     data = {}
@@ -41,7 +49,25 @@ def _dump_all(db: Session) -> dict:
     data["projects"] = rows(m.Project, ["id", "title", "area_id", "description", "start_date",
                                         "target_date", "status", "tags", "progress_override", "notes"])
     data["tasks"] = rows(m.Task, ["id", "project_id", "title", "status", "priority",
-                                   "due_date", "completed_at", "effort", "notes", "created_at"])
+                                   "due_date", "planning_date", "completed_at", "effort", "notes", "created_at"])
+    data["events"] = [
+        {
+            "id": event.id,
+            "title": event.title,
+            "description": event.description,
+            "is_all_day": event.is_all_day,
+            "start_at": _utc_backup_datetime(event.start_at),
+            "end_at": _utc_backup_datetime(event.end_at),
+            "start_date": event.start_date,
+            "end_date": event.end_date,
+            "location": event.location,
+            "category": event.category,
+            "color": event.color,
+            "created_at": _utc_backup_datetime(event.created_at),
+            "updated_at": _utc_backup_datetime(event.updated_at),
+        }
+        for event in db.query(m.Event).all()
+    ]
     data["snapshots"] = rows(m.Snapshot, ["id", "date", "project_id", "progress", "tasks_done", "tasks_total"])
     data["habits"] = rows(m.Habit, ["id", "title", "area_id", "description", "frequency",
                                       "target_days", "frequency_count", "habit_type", "target_value",
@@ -140,11 +166,17 @@ def get_stats(db: Session = Depends(get_db)):
 _IMPORT_PREVIEWS: dict[str, dict] = {}
 _ENTITY_MODELS = {
     "areas": m.Area, "dreams": m.Dream, "dream_areas": m.DreamArea,
-    "projects": m.Project, "tasks": m.Task, "snapshots": m.Snapshot,
+    "projects": m.Project, "tasks": m.Task, "events": m.Event, "snapshots": m.Snapshot,
     "habits": m.Habit, "habit_logs": m.HabitLog, "weekly_reviews": m.WeeklyReview,
 }
-_DATE_FIELDS = {"created_at", "start_date", "target_date", "due_date", "completed_at", "date", "week_start"}
-_DATETIME_FIELDS = {"completed_at"}
+_LEGACY_COMPLETE_BACKUP_ENTITIES = set(_ENTITY_MODELS) - {"events"}
+_DATE_FIELDS = {"created_at", "start_date", "target_date", "end_date", "due_date", "planning_date",
+                "completed_at", "date", "week_start"}
+_DATETIME_FIELDS = {
+    "tasks": {"created_at"},
+    "weekly_reviews": {"completed_at"},
+    "events": {"start_at", "end_at", "created_at", "updated_at"},
+}
 
 
 def _validate_import(
@@ -175,7 +207,7 @@ def _validate_import(
             if row["id"] in seen:
                 issues.append(f"{entity} contains duplicate id {row['id']}")
             seen.add(row["id"])
-            if entity in ("areas", "dreams", "projects", "tasks", "habits") and not str(row.get("title", "")).strip():
+            if entity in ("areas", "dreams", "projects", "tasks", "events", "habits") and not str(row.get("title", "")).strip():
                 issues.append(f"{entity}[{index}] is missing a title")
             required_fields = {
                 "dream_areas": ("dream_id", "area_id"),
@@ -200,7 +232,8 @@ def _validate_import(
         "areas": {"created_at"},
         "dreams": {"created_at"},
         "projects": {"start_date", "target_date"},
-        "tasks": {"due_date", "completed_at", "created_at"},
+        "tasks": {"due_date", "planning_date", "completed_at", "created_at"},
+        "events": {"start_date", "end_date"},
         "snapshots": {"date"},
         "habits": {"created_at"},
         "habit_logs": {"date"},
@@ -220,12 +253,51 @@ def _validate_import(
                 if value in (None, ""):
                     continue
                 try:
-                    if (entity == "tasks" and field == "created_at") or (entity == "weekly_reviews" and field == "completed_at"):
-                        datetime.fromisoformat(str(value))
-                    else:
-                        date.fromisoformat(str(value)[:10])
+                    date.fromisoformat(str(value)[:10])
                 except (TypeError, ValueError):
                     issues.append(f'{entity} record {row.get("id")} has an invalid {field} date')
+    parsed_datetimes = {}
+    for entity, fields in _DATETIME_FIELDS.items():
+        for row in normalized[entity]:
+            for field in fields:
+                value = row.get(field)
+                if value in (None, ""):
+                    continue
+                try:
+                    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                    if entity == "events" and field in {"start_at", "end_at"}:
+                        if parsed.tzinfo is None or parsed.utcoffset() is None:
+                            raise ValueError("event timestamps require an explicit UTC offset")
+                    parsed_datetimes[(row.get("id"), field)] = parsed
+                except (TypeError, ValueError):
+                    issues.append(f'{entity} record {row.get("id")} has an invalid {field} timestamp')
+
+    for row in normalized["events"]:
+        event_id = row.get("id")
+        is_all_day = row.get("is_all_day")
+        if type(is_all_day) is not bool:
+            issues.append(f"Event {event_id} has an invalid is_all_day flag")
+            continue
+        if is_all_day:
+            if not row.get("start_date") or not row.get("end_date"):
+                issues.append(f"Event {event_id} requires start_date and exclusive end_date")
+            if row.get("start_at") not in (None, "") or row.get("end_at") not in (None, ""):
+                issues.append(f"All-day event {event_id} must not include timed fields")
+            try:
+                if row.get("start_date") and row.get("end_date"):
+                    if date.fromisoformat(str(row["end_date"])[:10]) <= date.fromisoformat(str(row["start_date"])[:10]):
+                        issues.append(f"All-day event {event_id} must end after it starts")
+            except (TypeError, ValueError):
+                pass  # The date validation above reports malformed values.
+        else:
+            if not row.get("start_at") or not row.get("end_at"):
+                issues.append(f"Timed event {event_id} requires start_at and end_at")
+            if row.get("start_date") not in (None, "") or row.get("end_date") not in (None, ""):
+                issues.append(f"Timed event {event_id} must not include all-day date fields")
+            start_value = parsed_datetimes.get((event_id, "start_at"))
+            end_value = parsed_datetimes.get((event_id, "end_at"))
+            if start_value and end_value and end_value <= start_value:
+                issues.append(f"Timed event {event_id} must end after it starts")
 
     def exists(entity, identifier):
         if not isinstance(identifier, str) or not identifier:
@@ -299,7 +371,7 @@ def selective_export(
     db: Session = Depends(get_db),
 ):
     selected = {name.strip() for name in entities.split(",") if name.strip()}
-    supported = {"areas", "dreams", "projects", "tasks", "habits"}
+    supported = {"areas", "dreams", "projects", "tasks", "habits", "events"}
     if not selected or selected - supported:
         raise HTTPException(422, "Choose one or more supported entity types")
     data = _dump_all(db)
@@ -340,7 +412,7 @@ def selective_export(
         ]
     else:
         data["tasks"] = []
-    for name in ("areas", "dreams", "habits"):
+    for name in ("areas", "dreams", "habits", "events"):
         if name not in selected:
             data[name] = []
     if "habits" not in selected:
@@ -374,7 +446,7 @@ async def preview_import(file: UploadFile = File(...), db: Session = Depends(get
         and type(data.get("schema_version")) is int
         and data.get("schema_version") == 1
         and not data.get("entities")
-        and set(_ENTITY_MODELS).issubset(data.keys())
+        and _LEGACY_COMPLETE_BACKUP_ENTITIES.issubset(data.keys())
     )
     normalized, issues = _validate_import(
         data,
@@ -425,7 +497,7 @@ def commit_import(payload: dict, db: Session = Depends(get_db)):
     applied = {}
     try:
         if policy == "replace_all":
-            for model in (m.HabitLog, m.Habit, m.WeeklyReview, m.Snapshot, m.Task, m.Project, m.DreamArea, m.Dream, m.Area):
+            for model in (m.Event, m.HabitLog, m.Habit, m.WeeklyReview, m.Snapshot, m.Task, m.Project, m.DreamArea, m.Dream, m.Area):
                 db.query(model).delete(synchronize_session=False)
         for entity, entity_counts in current_counts.items():
             if policy == "replace_all":
@@ -442,7 +514,7 @@ def commit_import(payload: dict, db: Session = Depends(get_db)):
                     "update": entity_counts["update"],
                     "skip": 0,
                 }
-        order = ("areas", "dreams", "projects", "habits", "tasks", "snapshots", "habit_logs", "weekly_reviews", "dream_areas")
+        order = ("areas", "dreams", "projects", "habits", "tasks", "events", "snapshots", "habit_logs", "weekly_reviews", "dream_areas")
         for entity in order:
             model = _ENTITY_MODELS[entity]
             for row in data[entity]:
@@ -450,10 +522,14 @@ def commit_import(payload: dict, db: Session = Depends(get_db)):
                 if existing and policy == "skip":
                     continue
                 values = {key: value for key, value in row.items() if key in model.__table__.columns.keys()}
-                for key in _DATE_FIELDS & values.keys():
+                fields_to_parse = _DATE_FIELDS | _DATETIME_FIELDS.get(entity, set())
+                for key in fields_to_parse & values.keys():
                     if values[key]:
-                        if (key == "completed_at" and entity == "weekly_reviews") or (key == "created_at" and entity == "tasks"):
-                            values[key] = datetime.fromisoformat(str(values[key]))
+                        if key in _DATETIME_FIELDS.get(entity, set()):
+                            parsed = datetime.fromisoformat(str(values[key]).replace("Z", "+00:00"))
+                            if entity == "events" and parsed.tzinfo is not None:
+                                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+                            values[key] = parsed
                         else:
                             values[key] = date.fromisoformat(str(values[key])[:10])
                 obj = model(**values)

@@ -35,6 +35,7 @@ def _to_out(t: m.Task) -> TaskOut:
         status=t.status.value if hasattr(t.status, "value") else t.status,
         priority=t.priority.value if hasattr(t.priority, "value") else t.priority,
         due_date=t.due_date,
+        planning_date=t.planning_date,
         completed_at=t.completed_at,
         effort=t.effort,
         notes=t.notes,
