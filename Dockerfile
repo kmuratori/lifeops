@@ -10,7 +10,7 @@ RUN     mkdir /data
 RUN     useradd -u 4200 -r user0
 RUN     chown user0:user0 /app
 RUN     chown user0:user0 /data
-COPY    --chown=user0 --form=builder /build /usr/local
+COPY    --chown=user0 --from=builder /build /usr/local
 COPY    --chown=user0 --exclude=requirements.txt . .
 USER    user0
 ENV     LIFEOPS_DB_PATH="/data"
