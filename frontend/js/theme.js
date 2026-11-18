@@ -4,7 +4,7 @@
 
 const Theme = {
   MODES: ['dark', 'light', 'system'],
-  ICONS: { dark: '🌙', light: '☀️', system: '🖥' },
+  ICONS: { dark: 'Dark', light: 'Light', system: 'System' },
 
   get() {
     return localStorage.getItem('lifeops-theme') || 'system';

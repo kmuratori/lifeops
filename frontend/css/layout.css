@@ -111,9 +111,26 @@
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 720px) {
-  .body-grid { grid-template-columns: 44px 1fr; }
-  .sidebar .nav-link span.label { display: none; }
-  .sidebar .nav-group-label { display: none; }
+  #app { grid-template-rows: var(--topbar-h) 1fr; }
+  .body-grid { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .sidebar .nav-link { flex: 0 0 auto; padding: 7px 9px; }
+  .sidebar .nav-link span.label { display: inline; }
+  .sidebar .nav-group-label, .sidebar-spacer, .sidebar-divider { display: none; }
+  .main-panel { min-width: 0; padding: 16px 14px 40px; }
+  .topbar { padding: 0 10px; gap: 8px; }
+  .topbar > div:last-child { gap: 4px !important; }
+  .topbar button { padding: 6px 8px; font-size: 11px; }
+  .focus-mode .body-grid { grid-template-columns: 1fr; }
   .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
 }
 
@@ -174,17 +191,15 @@
 }
 
 /* -----------------------------------------------------------------------
-   Focus mode -- sidebar collapses to icon strip
+   Focus mode compresses the sidebar while keeping labels readable
    --------------------------------------------------------------------- */
 .focus-mode .body-grid {
-  grid-template-columns: 44px 1fr;
+  grid-template-columns: 92px 1fr;
 }
-.focus-mode .sidebar .label,
-.focus-mode .sidebar .nav-group-label {
-  display: none;
-}
+.focus-mode .sidebar .nav-group-label { display: none; }
 .focus-mode .sidebar .nav-link {
   justify-content: center;
-  padding: 10px 0;
-  gap: 0;
+  padding: 8px 4px;
+  text-align: center;
+  white-space: normal;
 }

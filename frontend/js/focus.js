@@ -32,7 +32,8 @@ const FocusMode = {
 
     const [tasks, habits] = await Promise.all([API.listTasks(), API.listHabits()]);
 
-    const todayStr   = new Date().toISOString().slice(0, 10);
+    const focusDate  = new Date();
+    const todayStr   = `${focusDate.getFullYear()}-${String(focusDate.getMonth() + 1).padStart(2, '0')}-${String(focusDate.getDate()).padStart(2, '0')}`;
     const hour       = new Date().getHours();
     const greeting   = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     const dayOfWeek  = (new Date().getDay() + 6) % 7; // 0=Mon
@@ -121,7 +122,13 @@ const FocusMode = {
     document.querySelectorAll('.focus-habit-check').forEach((btn) => {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
-        await API.logHabit(btn.dataset.habitId, { done: true });
+        await logWithUndo(
+          btn.dataset.habitId,
+          { done: true },
+          { done: false, value: null },
+          'Habit updated',
+          () => FocusMode._renderFocusView(),
+        );
         FocusMode._renderFocusView();
       });
     });

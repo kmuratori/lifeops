@@ -2,11 +2,16 @@
 
 async function renderProjects(main) {
   const [projects, areas] = await Promise.all([API.listProjects(), API.listAreas()]);
+  let selectionMode = false;
+  const selectedProjects = new Set();
 
   main.innerHTML = `
     <div class="view-header">
       <h1>Projects</h1>
-      <button class="primary" id="new-project-btn">+ New Project</button>
+      <div class="view-actions">
+        <button id="toggle-project-selection">Select projects</button>
+        <button class="primary" id="new-project-btn">+ New Project</button>
+      </div>
     </div>
     <div class="filter-bar">
       <div class="search-wrap">
@@ -20,9 +25,16 @@ async function renderProjects(main) {
         <option value="">All statuses</option>
         ${['active', 'paused', 'done', 'dropped'].map((s) => `<option value="${s}">${s}</option>`).join('')}
       </select>
-      <button id="clear-filters" class="clear-filters-btn" title="Clear filters">✕ Clear</button>
+      <button id="clear-filters" class="clear-filters-btn" title="Clear filters">Clear</button>
     </div>
     <div id="projects-count" class="filter-count"></div>
+    <div class="selection-toolbar" id="project-selection-toolbar" hidden>
+      <label><input type="checkbox" id="select-all-projects"> Select visible</label>
+      <span id="selected-project-count">0 selected</span>
+      <button type="button" id="pause-selected-projects">Pause selected</button>
+      <button type="button" id="delete-selected-projects" class="danger-btn">Delete selected</button>
+      <button type="button" id="clear-project-selection">Clear</button>
+    </div>
     <div id="projects-grid" class="grid grid-cards"></div>
   `;
 
@@ -71,11 +83,31 @@ async function renderProjects(main) {
         ? `<div class="empty-state">No projects match your search.</div>`
         : `<div class="empty-state">No projects yet. A project is anything with a finish line — "MemSnap", "CTF Training". Add one under an area.</div>`;
     } else {
-      grid.innerHTML = filtered.map((p) => projectCard(p, query)).join('');
+      grid.innerHTML = filtered.map((p) => projectCard(p, query, selectionMode, selectedProjects.has(p.id))).join('');
       grid.querySelectorAll('.project-card').forEach((el) => {
-        el.addEventListener('click', () => openProjectDetail(projects.find((p) => p.id === el.dataset.projectId), areas));
+        el.addEventListener('click', (event) => {
+          if (event.target.closest('.project-select')) return;
+          if (!selectionMode) openProjectDetail(projects.find((p) => p.id === el.dataset.projectId), areas);
+        });
+      });
+      grid.querySelectorAll('.project-select').forEach((checkbox) => {
+        checkbox.addEventListener('click', (event) => event.stopPropagation());
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) selectedProjects.add(checkbox.dataset.projectId);
+          else selectedProjects.delete(checkbox.dataset.projectId);
+          updateSelection(filtered);
+        });
       });
     }
+    updateSelection(filtered);
+  }
+
+  function updateSelection(filtered) {
+    document.getElementById('selected-project-count').textContent = `${selectedProjects.size} selected`;
+    const all = document.getElementById('select-all-projects');
+    const visible = filtered.map((p) => p.id);
+    all.checked = visible.length > 0 && visible.every((id) => selectedProjects.has(id));
+    all.indeterminate = visible.some((id) => selectedProjects.has(id)) && !all.checked;
   }
 
   draw();
@@ -98,6 +130,43 @@ async function renderProjects(main) {
     draw();
   });
   document.getElementById('new-project-btn').addEventListener('click', () => openProjectModal(null, areas));
+  document.getElementById('toggle-project-selection').addEventListener('click', (event) => {
+    selectionMode = !selectionMode;
+    if (!selectionMode) selectedProjects.clear();
+    event.currentTarget.textContent = selectionMode ? 'Exit selection' : 'Select projects';
+    document.getElementById('project-selection-toolbar').hidden = !selectionMode;
+    draw();
+  });
+  document.getElementById('select-all-projects').addEventListener('change', (event) => {
+    const { query, area, status } = getFilters();
+    const visible = projects.filter((p) => (!area || p.area_id === area) && (!status || p.status === status) && matchesSearch(p, query));
+    if (event.target.checked) visible.forEach((p) => selectedProjects.add(p.id));
+    else visible.forEach((p) => selectedProjects.delete(p.id));
+    draw();
+  });
+  document.getElementById('clear-project-selection').addEventListener('click', () => { selectedProjects.clear(); draw(); });
+  document.getElementById('pause-selected-projects').addEventListener('click', () => runProjectBulkAction('pause'));
+  document.getElementById('delete-selected-projects').addEventListener('click', () => runProjectBulkAction('delete'));
+
+  async function runProjectBulkAction(action) {
+    const ids = [...selectedProjects];
+    if (!ids.length) return appAlert('Select at least one project first.');
+    const accepted = await appConfirm(
+      action === 'delete'
+        ? `Delete ${ids.length} selected project${ids.length === 1 ? '' : 's'}? Projects with tasks or progress history will be kept and reported as an error; associated records will not be cascade-deleted.`
+        : `Pause ${ids.length} selected project${ids.length === 1 ? '' : 's'}?`,
+      { title: action === 'delete' ? 'Delete projects' : 'Pause projects', confirmText: action === 'delete' ? 'Delete' : 'Pause', danger: action === 'delete' },
+    );
+    if (!accepted) return;
+    try {
+      const result = await API.bulkProjects({ ids, action });
+      selectedProjects.clear();
+      if (result.affected !== ids.length) await appAlert(`Only ${result.affected} project(s) were updated.`, { title: 'Partial result' });
+      draw();
+    } catch (error) {
+      appAlert(error.message, { title: 'Project action failed' });
+    }
+  }
 }
 
 function highlightText(text, query) {
@@ -108,10 +177,11 @@ function highlightText(text, query) {
   );
 }
 
-function projectCard(p, query) {
+function projectCard(p, query, selectionMode = false, selected = false) {
   const overdue = p.target_date && daysUntil(p.target_date) < 0 && p.status !== 'done';
   return `
     <div class="card project-card dream-stripe" style="border-left-color:${p.area_color || 'var(--border)'}" data-project-id="${p.id}">
+      ${selectionMode ? `<label class="project-select-control"><input type="checkbox" class="project-select" data-project-id="${p.id}" aria-label="Select ${escapeHtml(p.title)}" ${selected ? 'checked' : ''}></label>` : ''}
       <div class="pc-head">
         <span class="pc-title">${highlightText(p.title, query)}</span>
         <span class="badge status-${p.status}">${p.status}</span>
@@ -124,7 +194,7 @@ function projectCard(p, query) {
       <div class="muted mono" style="font-size:11px;">${p.tasks_done}/${p.tasks_total} tasks done</div>
       <div class="pc-meta">
         <span>${p.area_title ? highlightText(p.area_title, query) + ' · ' : ''}Due: ${fmtDate(p.target_date)}</span>
-        ${overdue ? `<span style="color:var(--danger);">🔴 overdue</span>` : ''}
+        ${overdue ? `<span style="color:var(--danger);">Overdue</span>` : ''}
       </div>
     </div>
   `;
@@ -164,7 +234,7 @@ async function openProjectDetail(project, areas) {
   }
 
   panel.innerHTML = `
-    <button class="close-btn" id="close-detail">✕</button>
+    <button class="close-btn" id="close-detail" aria-label="Close details">Close</button>
     <h1>${escapeHtml(project.title)}</h1>
     <div class="badge status-${project.status}" style="margin-bottom:12px;">${project.status}</div>
     <p class="muted" style="font-size:13px; white-space:pre-wrap;">${escapeHtml(project.description || 'No description yet.')}</p>
@@ -229,10 +299,17 @@ async function openProjectDetail(project, areas) {
     openProjectModal(project, areas);
   });
   document.getElementById('delete-project-btn').addEventListener('click', async () => {
-    if (confirm(`Delete "${project.title}" and all its tasks?`)) {
+    const accepted = await appConfirm(
+      `Delete "${project.title}"? Tasks and progress snapshots are never cascade-deleted. Move or detach its tasks and export any history first; the server blocks deletion while dependencies remain.`,
+      { title: 'Delete project', confirmText: 'Delete', danger: true },
+    );
+    if (!accepted) return;
+    try {
       await API.deleteProject(project.id);
       closeProjectDetail();
       Router.resolve();
+    } catch (error) {
+      appAlert(error.message, { title: 'Project was not deleted' });
     }
   });
 }
@@ -285,21 +362,29 @@ function openProjectModal(project, areas) {
   document.getElementById('cancel-modal').addEventListener('click', closeModal);
   document.getElementById('project-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const fd = new FormData(e.target);
-    const payload = {
-      title: fd.get('title'),
-      area_id: fd.get('area_id') || null,
-      description: fd.get('description') || null,
-      start_date: fd.get('start_date') || null,
-      target_date: fd.get('target_date') || null,
-      status: fd.get('status'),
-      tags: fd.get('tags').split(',').map((t) => t.trim()).filter(Boolean),
-      notes: project?.notes || null,
-    };
-    if (isEdit) await API.updateProject(project.id, payload);
-    else await API.createProject(payload);
-    closeModal();
-    Router.resolve();
+    const finish = beginFormSubmission(e.currentTarget);
+    if (!finish) return;
+    try {
+      const fd = new FormData(e.currentTarget);
+      const payload = {
+        title: fd.get('title'),
+        area_id: fd.get('area_id') || null,
+        description: fd.get('description') || null,
+        start_date: fd.get('start_date') || null,
+        target_date: fd.get('target_date') || null,
+        status: fd.get('status'),
+        tags: fd.get('tags').split(',').map((t) => t.trim()).filter(Boolean),
+        notes: project?.notes || null,
+      };
+      if (isEdit) await API.updateProject(project.id, payload);
+      else await API.createProject(payload);
+      closeModal();
+      Router.resolve();
+    } catch (error) {
+      appAlert(error.message, { title: 'Could not save project' });
+    } finally {
+      finish();
+    }
   });
 }
 

@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from db.session import init_db
-from api import areas, dreams, projects, tasks, insights, habits, reviews, settings, calendar
+from api import areas, dreams, projects, tasks, insights, habits, reviews, settings, calendar, events
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -26,12 +26,14 @@ app.include_router(habits.router)
 app.include_router(reviews.router)
 app.include_router(settings.router)
 app.include_router(calendar.router)
+app.include_router(events.router)
 
 # static assets (css/js/fonts) — index.html served separately below so that
 # hash-based client routing (#/dashboard etc.) always resolves to index.html
 app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
 app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
-app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+if (FRONTEND_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
 
 @app.get("/")
@@ -41,4 +43,7 @@ def index():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=7070, reload=True)
+    from scheduler import start_scheduler
+    start_scheduler()
+    import config
+    uvicorn.run("main:app", host=config.HOST, port=config.PORT)
