@@ -13,5 +13,6 @@ RUN     chown user0:user0 /data
 COPY    --chown=user0 --from=builder /build /usr/local
 COPY    --chown=user0 --exclude=requirements.txt . .
 USER    user0
-ENV     LIFEOPS_DB_PATH="/data"
+ENV     LIFEOPS_DB_PATH="/data/data.db"
+ENV     LIFEOPS_LAN=true
 CMD     [ "python", "cli.py", "serve" ]
