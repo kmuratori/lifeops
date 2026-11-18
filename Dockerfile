@@ -14,4 +14,4 @@ COPY    --chown=user0 --from=builder /build /usr/local
 COPY    --chown=user0 --exclude=requirements.txt . .
 USER    user0
 ENV     LIFEOPS_DB_PATH="/data"
-CMD     [ "python", "cli.app", "serve" ]
+CMD     [ "python", "cli.py", "serve" ]
