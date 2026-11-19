@@ -6,6 +6,7 @@ on:
     branches:
       - 'master'
   pull_request:
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -50,15 +51,17 @@ jobs:
   docker-build:
     needs: [be-tests, fe-tests]
     runs-on: ubuntu-latest
+    env:
+      IMAGE: lifeops:prod
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Build docker image
-        run: docker build -t lifeops:prod .
+        run: docker build -t ${{ env.IMAGE }} .
 
-      - name: Run scripts/smoke_test.sh
-        run: ./scripts/smoke_test.sh
+      - name: Test smoke
+        run: ./scripts/smoke_test.py ${{ env.IMAGE }} 30
 
   publish:
     if: ${{ github.ref_name == github.event.repository.default_branch }}
